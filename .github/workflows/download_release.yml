@@ -32,7 +32,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests nbtlib
+          pip install requests snbtlib
 
       - name: Configure Git
         run: |
