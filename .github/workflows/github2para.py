@@ -79,19 +79,25 @@ def handle_ftb_quests_snbt():
 async def main():
     handle_ftb_quests_snbt()
 
-    files = get_filelist("./source")
+    files = get_filelist("./Source")
     tasks = []
 
     if not files:
-        print("在 'source' 目录中未找到任何 'en_us.json' 文件。请检查文件是否存在。")
+        print("在 'Source' 目录中未找到任何 'en_us.json' 文件。请检查文件是否存在。")
         return
 
     for file in files:
-        # 从 'source' 后的路径开始计算，作为 Paratranz 上的路径
-        relative_path = os.path.dirname(file).replace("source", "", 1)
+        # 使用 os.path.relpath 获取相对于 'Source' 目录的正确路径
+        path = os.path.relpath(os.path.dirname(file), "./Source")
+
+        # 如果文件直接位于 Source 目录下，relpath 会返回 "."，将其转换为空路径
+        if path == ".":
+            path = ""
+
         # 统一路径分隔符为 '/'
-        path = relative_path.replace("\\", "/").strip("/")
-        # 如果路径非空，确保它以 '/' 结尾
+        path = path.replace("\\", "/")
+
+        # 如果路径非空（不是根目录），确保它以 '/' 结尾
         if path:
             path += "/"
 
