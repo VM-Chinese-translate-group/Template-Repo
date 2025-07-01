@@ -119,7 +119,7 @@ def process_translation(file_id: int, path: Path) -> dict[str, str]:
         value = re.sub(r'\\"', '\"', value)
 
         # 对quest文件进行特殊处理
-        if is_quest_file and "image" not in value:
+        if is_quest_file and "image" not in value and not value.startswith("[\""):
             value = value.replace(" ", "\u00A0")
 
         # 保存替换后的值
@@ -147,7 +147,7 @@ def main() -> None:
         print(f"已从Paratranz下载到仓库：{log_path}")
 
         # 检查是否为 FTB Quests 的语言文件，并记录其输出目录
-        if "kubejs/assets/quests/lang/" in path_str and os.path.exists("source/ftbquest/quests/lang/en_us.snbt"):
+        if "kubejs/assets/quests/lang/" in path_str and os.path.exists("Source/config/ftbquests/quests/lang/en_us.snbt"):
             ftb_quests_lang_dir = Path("CNPack") / path.parent
 
     # 在所有文件处理完毕后，如果检测到了 FTB Quests 文件，则执行合并

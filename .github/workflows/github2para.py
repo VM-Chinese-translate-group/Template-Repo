@@ -50,11 +50,11 @@ def handle_ftb_quests_snbt():
     检查是否存在 FTB Quests 的 en_us.snbt 文件。
     如果存在，则使用 LangSpliter 将其拆分为多个 JSON 文件，以便上传。
     """
-    snbt_file = "source/config/ftbquests/quests/lang/en_us.snbt"
-    chapters_dir = "source/config/ftbquests/quests/chapters"
-    chapter_groups_file = "source/config/ftbquests/quests/chapter_groups.snbt"
+    snbt_file = "Source/config/ftbquests/quests/lang/en_us.snbt"
+    chapters_dir = "Source/config/ftbquests/quests/chapters"
+    chapter_groups_file = "Source/config/ftbquests/quests/chapter_groups.snbt"
     # 定义拆分后的JSON文件输出目录，与para2github.py的逻辑保持一致
-    output_json_dir = "source/kubejs/assets/quests/lang"
+    output_json_dir = "Source/kubejs/assets/quests/lang"
 
     if os.path.exists(snbt_file):
         print(f"检测到 SNBT 文件: {snbt_file}，将进行自动拆分...")
