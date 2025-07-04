@@ -4,7 +4,7 @@
 
 CurseForge|加载器|整合包版本|汉化维护状态
 :-|:-|:-|:-
-[链接](原链接)|模组加载器|mc版本 整合包版本|*翻译中*|
+[链接](原链接)|模组加载器|mc版本 整合包版本|翻译中|
 
 ---
 
@@ -12,12 +12,7 @@ CurseForge|加载器|整合包版本|汉化维护状态
 
 汉化发布：[VM汉化组官网](https://vmct-cn.top/modpacks/项目)
 
-项目主管 @[某某](https://github.com/某某)
-
 译者：[查看贡献者排行榜](https://paratranz.cn/projects/项目/leaderboard)
-
-
----
 
 # 整合包介绍
 

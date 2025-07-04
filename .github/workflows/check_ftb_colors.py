@@ -6,7 +6,7 @@ import argparse
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Union, List
+from typing import Union
 
 @dataclass
 class ErrorRecord:
@@ -175,7 +175,7 @@ def main():
         print(f"错误: 路径不存在 -> {check_path}", file=sys.stderr)
         sys.exit(1)
 
-    errors: List[ErrorRecord] = []
+    errors: list[ErrorRecord] = []
 
     if os.path.isdir(check_path):
         errors.extend(check_directory(check_path))

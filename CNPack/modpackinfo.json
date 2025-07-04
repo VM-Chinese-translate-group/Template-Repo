@@ -1,0 +1,13 @@
+{
+  "modpack": {
+    "name": "名字",
+    "version": "整合包版本（无用）",
+    "translation": {
+      "url": "https://vmct-cn.top/modpacks/官网页面/",
+      "language": "zh_cn",
+      "version": "汉化版本1.0.0",
+      "updateCheckUrl": "https://gitee.com/Wulian233/vmtu/raw/main/update/联系捂脸.txt",
+      "resourcePackName": "VM汉化组模组汉化包1.19及以上"
+    }
+  }
+}
