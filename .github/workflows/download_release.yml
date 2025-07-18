@@ -32,7 +32,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests snbtlib
+          pip install requests ftb_snbt_lib
 
       - name: Configure Git
         run: |
