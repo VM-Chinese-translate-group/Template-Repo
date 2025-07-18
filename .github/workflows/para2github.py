@@ -66,7 +66,8 @@ def get_files() -> None:
 
 def save_translation(zh_cn_dict: dict[str, str], path: Path) -> None:
     """
-    保存翻译内容到指定的 JSON 文件。
+    保存翻译内容到指定的 JSON 文件，并保持与源文件完全相同的格式。
+    （已修复 \n 等转义字符被错误解析的问题）
 
     :param zh_cn_dict: 翻译内容的字典
     :param path: 原始文件路径
@@ -77,20 +78,38 @@ def save_translation(zh_cn_dict: dict[str, str], path: Path) -> None:
     file_path = dir_path / zh_cn_filename
     source_path = Path("Source") / path
 
-    with open(file_path, "w", encoding="UTF-8") as f:
-        try:
-            with open(source_path, "r", encoding="UTF-8") as f1:
-                # 使用 OrderedDict 保留源文件的键顺序
-                source_json: dict = json.load(f1, object_pairs_hook=OrderedDict)
+    try:
+        with open(source_path, "r", encoding="UTF-8") as f1:
+            source_content = f1.read()
+            source_json = json.loads(source_content, object_pairs_hook=OrderedDict)
 
-            # 按源文件顺序更新值为翻译文本
-            for key in source_json.keys():
-                if key in zh_cn_dict:  # 仅更新存在的键
-                    source_json[key] = zh_cn_dict[key]
+        for key, original_value in source_json.items():
+            if key in zh_cn_dict:
+                translated_value = zh_cn_dict[key]
 
-            json.dump(source_json, f, ensure_ascii=False, indent=4, separators=(",", ":"))
-        except (IOError, FileNotFoundError):
-            print(f"{source_path}路径不存在，文件按首字母排序！")
+                original_value_str = json.dumps(original_value, ensure_ascii=False)
+                translated_value_str = json.dumps(translated_value, ensure_ascii=False)
+
+                key_pattern = re.escape(json.dumps(key, ensure_ascii=False))
+                value_pattern = re.escape(original_value_str)
+                
+                pattern = re.compile(f"({key_pattern}\\s*:\\s*){value_pattern}")
+                
+                # BUGFIX: 对替换字符串中的反斜杠进行转义。
+                # re.sub 会处理替换字符串中的反斜杠，因此我们需要将单个 '\' 变成 '\\'
+                # 以确保像 "\\n" 这样的字符串被当作字面量插入，而不是被解析成换行符。
+                safe_replacement_value = translated_value_str.replace('\\', '\\\\')
+
+                replacement = f"\\1{safe_replacement_value}"
+                
+                source_content, num_replacements = pattern.subn(replacement, source_content, count=1)
+        
+        with open(file_path, "w", encoding="UTF-8") as f:
+            f.write(source_content)
+
+    except (IOError, FileNotFoundError):
+        print(f"{source_path} 路径不存在，文件按首字母排序！")
+        with open(file_path, "w", encoding="UTF-8") as f:
             json.dump(zh_cn_dict, f, ensure_ascii=False, indent=4, separators=(",", ":"), sort_keys=True)
 
 
@@ -119,7 +138,7 @@ def process_translation(file_id: int, path: Path) -> dict[str, str]:
         value = re.sub(r'\\"', '\"', value)
 
         # 对quest文件进行特殊处理
-        if is_quest_file and "image" not in value and not value.startswith("[\""):
+        if is_quest_file and "image" not in value and not value.startswith("[\"") and "\"color\": " not in value:
             value = value.replace(" ", "\u00A0")
 
         # 保存替换后的值
