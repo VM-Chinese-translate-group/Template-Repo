@@ -437,7 +437,7 @@ def process_chapter_quests(chapters_dir, chapters_lang_data, quests_data, tasks_
             )
             chapter_output_content = OrderedDict(sorted_items)
 
-            cleaned_filename = filename.removesuffix(".snbt")
+            cleaned_filename = filename.removesuffix(".snbt").replace(" ", "_")
             output_filename = f"en_us_{cleaned_filename}.json"
 
             output_path = os.path.join(output_dir, output_filename)
