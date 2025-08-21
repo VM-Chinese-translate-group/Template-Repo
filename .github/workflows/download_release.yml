@@ -98,6 +98,8 @@ jobs:
     needs: paratranz-to-gitHub
     if: needs.paratranz-to-gitHub.outputs.changed == 'true'
     environment: PARATRANZ_ENV
+    permissions: 
+      contents: write
 
     steps:
       - name: Checkout code for Release

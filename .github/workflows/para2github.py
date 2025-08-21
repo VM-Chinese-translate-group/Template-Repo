@@ -134,14 +134,14 @@ def process_translation(file_id: int, path: Path) -> dict[str, str]:
     is_quest_file = "quests" in str(path)
 
     for key, value in zip(keys, values):
-        # 确保替换 \\u00A0 和 \\n
         value = re.sub(r'\\"', '\"', value)
 
-        # 对quest文件进行特殊处理
-        if is_quest_file and "image" not in value and not value.startswith("[\"") and "\"color\": " not in value:
+        # 增加一个判断：如果值像一个JSON对象（以{开头，以}结尾），则跳过全局替换
+        is_json_like = value.strip().startswith('{') and value.strip().endswith('}')
+
+        if is_quest_file and not is_json_like and "image" not in value and not value.startswith("[\"") and "\"color\": " not in value:
             value = value.replace(" ", "\u00A0")
 
-        # 保存替换后的值
         zh_cn_dict[key] = value
 
     return zh_cn_dict
