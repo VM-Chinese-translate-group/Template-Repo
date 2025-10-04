@@ -100,7 +100,8 @@ def split_and_process_all(source_lang_file, chapters_dir, chapter_groups_file, o
                 else:
                     # 默认行为：为所有行（或当展平功能关闭时）添加数字后缀
                     for i, line in enumerate(value, 1):
-                        new_key = f"{key}{i}"
+                        # 将数字格式化为两位，例如 1 -> 01, 10 -> 10
+                        new_key = f"{key}{i:02d}"
                         processed_line = unescape_string(str(line))
                         lang_data[new_key] = processed_line
             elif isinstance(value, str):
@@ -184,7 +185,7 @@ def create_sort_key(item, config, task_to_quest_map, reward_to_quest_map):
     - quest_group_id: 次级排序依据。对任务级条目，这是它们所属的 quest_id，用于将任务、子任务、奖励聚合。
     - internal_type_priority: 三级排序依据。在任务组内排序，0: quest, 1: task, 2: reward。
     - custom_priority: 对 chapter.* 和 quest.* 条目的可配置排序。
-    - non_numeric_part & numeric_part: 用于实现数字的自然排序 (desc9, desc10)。
+    - non_numeric_part & numeric_part: 用于实现数字的自然排序 (desc09, desc10)。
     """
     key, _ = item
 
@@ -305,7 +306,8 @@ def process_item_list_for_components(item_list, list_key_name, output_dict):
                                 lore_line = lore_line.replace(r'\"', '"')
                             except (json.JSONDecodeError, TypeError):
                                 pass
-                            lang_key = f"{list_key_name}.{current_item_id}.lore{i}"
+                            # 将数字格式化为两位，例如 1 -> 01, 10 -> 10
+                            lang_key = f"{list_key_name}.{current_item_id}.lore{i:02d}"
                             output_dict[lang_key] = lore_line
 
             # 无论是否找到 'components'，都继续向更深层递归
@@ -385,7 +387,8 @@ def process_chapter_quests(chapters_dir, chapters_lang_data, quests_data, tasks_
                             chapter_output_content[key] = unescape_string(hover_value)
                         elif isinstance(hover_value, list):
                             for j, line in enumerate(hover_value, 1):
-                                key = f"chapter.{chapter_id}.image.{i}.hover{j}"
+                                # 将数字格式化为两位，例如 1 -> 01, 10 -> 10
+                                key = f"chapter.{chapter_id}.image.{i}.hover{j:02d}"
                                 chapter_output_content[key] = unescape_string(str(line))
 
             # 收集本章节所有相关的任务和奖励语言条目
@@ -425,7 +428,8 @@ def process_chapter_quests(chapters_dir, chapters_lang_data, quests_data, tasks_
                             chapter_output_content[key] = unescape_string(feedback_value)
                         elif isinstance(feedback_value, list):
                             for j, line in enumerate(feedback_value, 1):
-                                key = f"reward.{reward_id}.feedback_message{j}"
+                                # 将数字格式化为两位，例如 1 -> 01, 10 -> 10
+                                key = f"reward.{reward_id}.feedback_message{j:02d}"
                                 chapter_output_content[key] = unescape_string(str(line))
 
             if not chapter_output_content: continue
@@ -467,7 +471,8 @@ def update_chapter_files_with_components(component_data, input_chapters_dir, out
     mods_by_id = {}
     feedback_mods_by_id = {}
     hover_mods_by_chapter_id = {}
-
+    
+    # 无需修改，(\d+) 和 (\d*) 可以正确匹配 01, 02 等
     lore_pattern = re.compile(r'^(?:tasks|rewards)\.([0-9A-F]+)\.lore(\d+)$')
     name_pattern = re.compile(r'^(?:tasks|rewards)\.([0-9A-F]+)\.custom_name$')
     feedback_pattern = re.compile(r'^reward\.([0-9A-F]+)\.feedback_message(\d*)$')
@@ -535,7 +540,7 @@ def update_chapter_files_with_components(component_data, input_chapters_dir, out
                 for img_idx, lines in hover_mods_by_chapter_id[chapter_id].items():
                     if 0 <= img_idx < len(images_list):
                         original_key = f'chapter.{chapter_id}.image.{img_idx}.hover'
-                        is_multiline = any(k.startswith(original_key + '1') for k in component_data.keys())
+                        is_multiline = any(k.startswith(original_key + '01') for k in component_data.keys())
 
                         if is_multiline or len(lines) > 1:
                             # 将 list[str] 转换为 List[String]
@@ -577,7 +582,7 @@ def update_chapter_files_with_components(component_data, input_chapters_dir, out
                         if item_id in feed_mods:
                             lines = feed_mods[item_id]
                             original_key = f'reward.{item_id}.feedback_message'
-                            is_multiline = any(k.startswith(original_key + '1') for k in component_data.keys())
+                            is_multiline = any(k.startswith(original_key + '01') for k in component_data.keys())
                             if is_multiline or len(lines) > 1:
                                 data['feedback_message'] = List([String(line) for line in lines])
                             else:
@@ -649,6 +654,7 @@ def merge_all_to_snbt(json_dir: str, output_snbt_file: str, chapters_dir: str, o
     embedded_data = OrderedDict()
     standard_data = OrderedDict()
     # 这个正则表达式匹配所有需要被回填到章节文件而不是写入语言文件的键
+    # 无需修改，(\d+) 和 (\d*) 可以正确匹配 01, 02 等
     embedded_key_pattern = re.compile(
         r'^(tasks|rewards)\.[0-9A-F]+\.(custom_name|lore\d+)|'
         r'chapter\.[0-9A-F]+\.image\.\d+\.hover\d*|'
@@ -665,7 +671,8 @@ def merge_all_to_snbt(json_dir: str, output_snbt_file: str, chapters_dir: str, o
         update_chapter_files_with_components(embedded_data, chapters_dir, output_chapters_dir)
 
     print("\n开始重构多行文本条目...")
-
+    
+    # 无需修改，(\d+) 可以正确匹配 01, 02 等
     multi_line_pattern = re.compile(r'^(.*?)(\d+)$')
     temp_multiline = OrderedDict()
     reconstructed_data = OrderedDict()
