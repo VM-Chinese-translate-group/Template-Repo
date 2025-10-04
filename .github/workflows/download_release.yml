@@ -69,8 +69,6 @@ jobs:
 
           git add .
           git commit -m '从Paratranz同步翻译'
-
-          git pull --rebase origin main
           git push
 
           echo "changed=true" >> $GITHUB_OUTPUT

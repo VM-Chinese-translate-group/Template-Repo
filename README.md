@@ -6,51 +6,64 @@
 | :------------- | :--------- | :----------------- | :----------- |
 | [链接](原链接) | 模组加载器 | MC 版本 整合包版本 | 翻译中       |
 
----
+### 📌 汉化相关
 
-汉化项目：[Paratranz](https://paratranz.cn/projects/项目)
+- **汉化项目**：[Paratranz](https://paratranz.cn/projects/项目)
+- **汉化发布**：[VM 汉化组官网](https://vmct-cn.top/modpacks/项目)
+- **译者名单**：[贡献者排行榜](https://paratranz.cn/projects/项目/leaderboard)
 
-汉化发布：[VM 汉化组官网](https://vmct-cn.top/modpacks/项目)
+# 📖 整合包介绍
 
-译者：[查看贡献者排行榜](https://paratranz.cn/projects/项目/leaderboard)
+（在这里填写整合包介绍内容……）
 
-# 整合包介绍
-
-整合包介绍
-
-# 自动化 Paratranz 同步教程
+# ⚙️ 自动化 Paratranz 同步教程
 
 ## 1. 设置环境变量
 
-1. 到仓库顶部导航栏: `Settings -> Environments -> New environment` 新建 `PARATRANZ_ENV`
-2. 添加加密变量（Environment secrets）:
-   | 名称 | 值 |
-   |-------------|-------------------------------------------------|
-   | API_KEY | 你的 Paratranz token，须有上传文件权限 |
-   token 可在 <https://paratranz.cn/users/my> 中的设置部分获取。
-3. 添加环境变量（Environment variables）:
+1. 在仓库顶部导航栏依次进入：
+   `Settings -> Environments -> New environment`，新建环境 `PARATRANZ_ENV`。
+
+2. 在该环境中添加 **加密变量（Environment secrets）**：
+
+   | 名称    | 值                                       |
+   | ------- | ---------------------------------------- |
+   | API_KEY | 你的 Paratranz token，需具备上传文件权限 |
+
+   🔑 Token 可在 [Paratranz 用户设置页](https://paratranz.cn/users/my) 获取。
+
+3. 在该环境中添加 **环境变量（Environment variables）**：
 
    | 名称 | 值                              |
    | ---- | ------------------------------- |
    | ID   | Paratranz 项目 ID，例如 `10719` |
 
-## 2. 开始使用
+## 2. 使用说明
 
-我们的工作流有两种功能：从 Paratranz 同步到 github 仓库和从 github 仓库同步到 Paratranz。
+我们目前有两个 GitHub Actions 工作流：
 
-它们全都可以手动运行，操作方法如下图所示：
+- **Paratranz → GitHub**：从 Paratranz 拉取译文至 GitHub 仓库。
+- **GitHub → Paratranz**：将原文内容推送到 Paratranz。
+
+> ✅ 两者均支持手动运行，操作如下图所示：
 
 ![](.github/action.png)
 
-其中，Paratranz 同步到 GitHub 仓库工作流会分别在北京时间每天早晚上 10 点左右自动运行一次。
+### 自动运行规则
 
-下载译文至 Github 功能可自行修改`.github/workflows`文件夹中的`download_release.yml`自动执行时间，格式为[cron 表达式](https://blog.csdn.net/Stromboli/article/details/141962560)。
+- **Paratranz → GitHub** 会在北京时间 **每天早上与晚上 10 点左右** 自动执行。
+- 下载译文至 GitHub 的功能可通过修改 `.github/workflows/download_release.yml` 内的 `cron 表达式` 自行设定执行时间。
 
-在有译文更改后，工作流会自动发布一次标记为预发布的 Release 供大家测试。此外，每次从上游同步还将运行一次 FTB 任务颜色字符检查程序，
-当有颜色字符错误时，将会在 release 的说明页面中进行提示，并在工作流的构件（artifact）页和 release 页面上传错误报告的 html，相关人员可下载并通过浏览器打开该文件。
+📎 参考：[Cron 表达式教程](https://blog.csdn.net/Stromboli/article/details/141962560)
 
-当没有检查到颜色错误时，工作流详情页内会出现警告，提示找不到错误报告文件，这一点无需担心，不会造成任何负面影响。
+### 发布与检查机制
 
-注：从 github 仓库同步到 Paratranz 的工作流很少使用，故仅支持手动触发。
+- 当有译文更改时，工作流会自动发布一个 **预发布 Release** 供测试。
+- 每次同步上游后，会运行一次 **FTB 任务颜色字符检查程序**：
 
-如果项目已经完成，请在仓库设置（`Settings`）中禁用工作流运行。
+  - **发现错误**：在 Release 说明页面提示，并上传 HTML 报告至 **Artifacts** 和 **Release 页面**。
+  - **未发现错误**：工作流详情页会提示找不到报告文件，此属正常情况，无需担心。
+
+⚠️ 注意：
+
+- **GitHub → Paratranz** 的同步任务使用频率较低，仅支持手动触发。
+- 若项目已完成，请至仓库 **Settings** 中禁用工作流运行。
