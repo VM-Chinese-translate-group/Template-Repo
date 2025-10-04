@@ -12,9 +12,9 @@ jobs:
     environment: PARATRANZ_ENV
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # 允许推送代码到仓库
-      actions: read    # 允许读取工作流状态
-      packages: write  # 允许上传 artifacts
+      contents: write
+      actions: read
+      packages: write
     env:
       API_TOKEN: ${{ secrets.API_KEY }}
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -23,12 +23,12 @@ jobs:
       changed: ${{ steps.commit.outputs.changed }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: "3.13"
+          python-version: "3"
 
       - name: Install dependencies
         run: |
@@ -40,10 +40,10 @@ jobs:
           git config --global user.name "VM[BOT]"
 
       - name: Sync translations from Paratranz
-        run: python .github/workflows/para2github.py
+        run: python .github/scripts/para2github.py
 
       - name: Run FTB Color Checker Script
-        run: python .github/workflows/check_ftb_colors.py ./CNPack
+        run: python .github/scripts/check_ftb_colors.py ./CNPack
         continue-on-error: true
 
       - name: Check if error_report.html was generated
@@ -65,22 +65,12 @@ jobs:
             exit 0
           fi
 
-          # 如果有更改，则继续执行
-          echo "Changes detected. Preparing to commit..."
-
-          # 在暂存所有更改之前，从 Git 缓存中移除不需要的文件
-          # 这样可以避免 "changes not staged for commit" 的警告
-          git rm -r --cached --ignore-unmatch .github/workflows/__pycache__/
           git rm --cached --ignore-unmatch error_report.html
 
-          # 添加所有更改并提交
           git add .
           git commit -m '从Paratranz同步翻译'
 
-          # 推送前先拉取远程更改，避免冲突
           git pull --rebase origin main
-
-          # 推送到远程仓库
           git push
 
           echo "changed=true" >> $GITHUB_OUTPUT
@@ -103,7 +93,7 @@ jobs:
 
     steps:
       - name: Checkout code for Release
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           ref: 'main'
 

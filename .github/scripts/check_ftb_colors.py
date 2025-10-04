@@ -1,8 +1,8 @@
 import argparse
+import html
 import json
 import os
 import re
-import html
 import sys
 from collections.abc import Generator
 from dataclasses import dataclass
