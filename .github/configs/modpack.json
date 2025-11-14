@@ -1,0 +1,28 @@
+{
+  //这是一条为避免忘记修改而写的注释，如何修改请查看Readme文件。
+  "packId": 130,
+  "packName": "FTB StoneBlock 4",
+  "versionPattern": "FTB StoneBlock 4 {version}",
+  "updateMethod": "cursethebeast",
+  "infoFilePath": "CNPack/modpackinfo.json",
+  "sourceDir": "Source",
+  "attentionList": {
+    "folders": [
+      {
+        "path": "config/ftbquests/quests",
+        "ignoreDeletions": false
+      }
+    ],
+    "filePatterns": [
+      {
+        "pattern": "kubejs/assets/*/lang/en_us.json",
+        "ignoreDeletions": true
+      }
+    ]
+  },
+  "exclusionPatterns": [
+    "**/lang/*.*",
+    "**/dimdungeons/lang/*.*",
+    "!**/lang/en_us.*"
+  ]
+}
