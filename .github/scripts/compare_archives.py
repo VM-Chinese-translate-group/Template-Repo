@@ -12,128 +12,9 @@ import tempfile
 import zipfile
 from datetime import datetime
 from html import escape
+import string
 
-# --- 最终版 HTML 报告模板 ---
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>压缩包内容比较报告</title>
-    <style>
-        body {{
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            line-height: 1.6; color: #24292e; background-color: #f6f8fa; margin: 0; padding: 20px;
-        }}
-        .container {{
-            max-width: 90%; margin: 0 auto; background-color: #fff;
-            border: 1px solid #e1e4e8; border-radius: 6px;
-        }}
-        header {{ padding: 20px 30px; border-bottom: 1px solid #e1e4e8; }}
-        header h1 {{ color: #2c3e50; margin-top: 0; }}
-        .summary-grid {{
-            display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-            gap: 20px; margin: 20px 0;
-        }}
-        .summary-card {{
-            padding: 20px; border-radius: 8px; text-align: center; color: #fff;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }}
-        .summary-card .count {{ font-size: 2.2em; font-weight: 600; }}
-        .summary-card .label {{ font-size: 1em; margin-top: 5px; opacity: 0.9;}}
-        .card-added {{ background: #28a745; }}
-        .card-removed {{ background: #cb2431; }}
-        .card-modified {{ background: #f29d24; color: #fff; }}
-        .card-identical {{ background: #0366d6; }}
-
-        .details-section {{ padding: 10px 30px 30px; }}
-        details {{
-            margin-bottom: 10px; border: 1px solid #e1e4e8; border-radius: 6px; overflow: hidden;
-        }}
-        summary {{
-            padding: 12px 16px; font-weight: 600; font-size: 1.1em; cursor: pointer;
-            background-color: #f6f8fa; list-style: none; display: flex; justify-content: space-between; align-items: center;
-        }}
-        summary::-webkit-details-marker {{ display: none; }}
-        details[open] > summary {{ border-bottom: 1px solid #e1e4e8; }}
-
-        .file-list {{ list-style-type: none; padding: 10px 0; margin: 0; max-height: 400px; overflow-y: auto; }}
-        .file-list li {{
-            padding: 6px 20px; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
-            font-size: 0.9em; border-bottom: 1px solid #f1f1f1;
-        }}
-        .file-list li:last-child {{ border-bottom: none; }}
-
-        /* --- Diff 统计和表格样式 --- */
-        .diff-stats span {{ font-weight: bold; font-size: 0.9em; padding: 2px 6px; border-radius: 10px; }}
-        .diff-stat-add {{ color: #22863a; background-color: #e6ffed; }}
-        .diff-stat-del {{ color: #cb2431; background-color: #ffeef0; }}
-
-        .diff-container {{ padding: 0; background: #fff; }}
-        .diff-summary-bin {{ font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace; padding: 15px 20px; }}
-
-        .context-diff-table {{
-            width: 100%; border-collapse: collapse; font-size: 13px;
-            font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
-        }}
-        .context-diff-table td {{ padding: 2px 10px; line-height: 1.5; vertical-align: top; }}
-        .context-diff-table tr:hover {{ background-color: #f6f8fa; }}
-        .diff-line-num {{ width: 1%; text-align: right; color: rgba(27,31,35,.5); user-select: none; }}
-        .diff-line-op {{ width: 1%; user-select: none; padding-left: 5px !important; }}
-        .diff-line-code {{ white-space: pre-wrap; word-break: break-all; }}
-
-        .diff-add {{ background-color: #e6ffed; }}
-        .diff-add .diff-line-op {{ color: #22863a; }}
-        .diff-sub {{ background-color: #ffeef0; }}
-        .diff-sub .diff-line-op {{ color: #cb2431; }}
-        .diff-hunk {{ background-color: #f1f8ff; color: #555; }}
-        .diff-hunk td {{ font-weight: 600; }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>压缩包内容比较报告</h1>
-            <p><strong>旧版本 (Archive 1):</strong> {archive1_name}</p>
-            <p><strong>新版本 (Archive 2):</strong> {archive2_name}</p>
-            <p><strong>报告生成时间:</strong> {report_time}</p>
-        </header>
-
-        <section style="padding: 0 30px;">
-            <div class="summary-grid">
-                <div class="summary-card card-added">
-                    <div class="count">{added_count}</div>
-                    <div class="label">新增文件</div>
-                </div>
-                <div class="summary-card card-removed">
-                    <div class="count">{removed_count}</div>
-                    <div class="label">删除文件</div>
-                </div>
-                <div class="summary-card card-modified">
-                    <div class="count">{modified_count}</div>
-                    <div class="label">修改文件</div>
-                </div>
-                <div class="summary-card card-identical">
-                    <div class="count">{identical_count}</div>
-                    <div class="label">未变文件</div>
-                </div>
-            </div>
-        </section>
-
-        <section class="details-section">
-            <h2>详细差异</h2>
-            {details_html}
-        </section>
-
-        <footer>
-            <p style="text-align: center; font-size: 0.9em; color: #777; padding: 20px;">报告由 compare_archives.py 生成</p>
-        </footer>
-    </div>
-</body>
-</html>
-"""
-
+TEMPLATE_PATH = os.path.join(os.path.dirname(__file__), "comparison_report_template.html")
 
 def is_text_file(file_path):
     """判断文件是否为文本文件"""
@@ -276,16 +157,18 @@ def compare_directories(dir1, dir2):
 
 
 def generate_html_report(results, archive1_path, archive2_path, output_path):
-    """生成最终的 HTML 报告"""
+    """生成最终的 HTML 报告（从外部模板文件读取并填充数据）"""
     print(f"正在生成报告到 {output_path}...")
 
     def create_simple_file_list_html(files):
-        if not files: return ""
+        if not files:
+            return ""
         items = "".join(f'<li>{escape(f.as_posix())}</li>' for f in files)
         return f'<ul class="file-list">{items}</ul>'
 
     def create_modified_files_html(files):
-        if not files: return ""
+        if not files:
+            return ""
         details_items = []
         for file_info in files:
             path_str = escape(file_info['path'].as_posix())
@@ -308,9 +191,7 @@ def generate_html_report(results, archive1_path, archive2_path, output_path):
             """)
         return "".join(details_items)
 
-    # --- 开始修改 ---
-
-    # 1. 创建一个从中文标题到英文数据键的映射
+    # 区块标题与数据键映射
     key_map = {
         "新增文件": "added",
         "删除文件": "removed",
@@ -318,7 +199,6 @@ def generate_html_report(results, archive1_path, archive2_path, output_path):
         "未变文件": "identical"
     }
 
-    # 2. 创建不同区域的HTML内容
     sections = {
         "新增文件": create_simple_file_list_html(results['added']),
         "删除文件": create_simple_file_list_html(results['removed']),
@@ -327,28 +207,33 @@ def generate_html_report(results, archive1_path, archive2_path, output_path):
     }
 
     details_html = ""
-    # 3. 在循环中，使用映射来安全地获取数量
     for title, content in sections.items():
-        # 使用映射字典找到对应的英文键
         data_key = key_map[title]
-        # 直接从 results 字典获取列表并计算长度
         count = len(results[data_key])
 
         if count > 0:
-            # 对于修改的文件，内容已经包含了<details>，所以我们不需要再包一层
             if title == "修改文件":
-                # 直接添加修改文件的HTML块
+                # 修改文件每个文件本身就是一个 details，不再额外包一层
                 details_html += f'<div>{content}</div>'
             else:
                 details_html += f"""
-                 <details>
-                     <summary><span>{title} ({count})</span></summary>
-                     <div class="file-list-wrapper">{content}</div>
-                 </details>
-                 """
+                <details>
+                    <summary><span>{title} ({count})</span></summary>
+                    <div class="file-list-wrapper">{content}</div>
+                </details>
+                """
 
-    # 4. 在格式化模板时，也直接从 results 计算数量
-    html_content = HTML_TEMPLATE.format(
+    # 读取外部 HTML 模板
+    try:
+        with open(TEMPLATE_PATH, 'r', encoding='utf-8') as tf:
+            template_str = tf.read()
+    except FileNotFoundError:
+        print(f"错误: 找不到模板文件 {TEMPLATE_PATH}，请确认模板文件已放在脚本同目录。")
+        return
+
+    # 使用 string.Template 填充
+    tpl = string.Template(template_str)
+    html_content = tpl.substitute(
         archive1_name=escape(os.path.basename(archive1_path)),
         archive2_name=escape(os.path.basename(archive2_path)),
         report_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
@@ -358,10 +243,10 @@ def generate_html_report(results, archive1_path, archive2_path, output_path):
         identical_count=len(results['identical']),
         details_html=details_html
     )
-    # --- 结束修改 ---
 
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html_content)
+
     print("报告生成成功！")
 
 
