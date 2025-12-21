@@ -32,7 +32,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install requests ftb_snbt_lib
+          pip install requests
+          pip install git+https://github.com/YuanXiaCN/ftb-snbt-lib-fork.git
 
       - name: Configure Git
         run: |

@@ -12,34 +12,42 @@ configuration = paratranz_client.Configuration(host="https://paratranz.cn/api")
 configuration.api_key["Token"] = os.environ["API_TOKEN"]
 
 
-async def upload_file(path, file):
-    async with paratranz_client.ApiClient(configuration) as api_client:
-        api_instance = paratranz_client.FilesApi(api_client)
-        project_id = int(os.environ["PROJECT_ID"])
-        files_response = await api_instance.get_files(project_id)
+async def upload_file(api_client, project_id, path, file, existing_files_dict):
+    api_instance = paratranz_client.FilesApi(api_client)
+    
+    # 构建 Paratranz 中的完整文件路径
+    file_name = os.path.basename(file)
+    full_path = path + file_name
+    
+    # 检查文件是否已存在
+    existing_file = existing_files_dict.get(full_path)
+    
+    max_retries = 3
+    for attempt in range(max_retries):
         try:
-            # 第一次创建文件
-            api_response = await api_instance.create_file(
-                project_id, file=file, path=path
-            )
-            pprint(api_response)
+            if existing_file:
+                # 如果文件存在，直接更新
+                await api_instance.update_file(
+                    project_id, file_id=existing_file.id, file=file
+                )
+                print(f"文件已更新！文件路径为：{full_path}")
+            else:
+                # 如果文件不存在，创建新文件
+                api_response = await api_instance.create_file(
+                    project_id, file=file, path=path
+                )
+                pprint(api_response)
+            break # 成功则退出重试循环
         except ValidationError as error:
-            print(f"文件上传成功{path}{os.path.basename(file)}")
+            print(f"文件上传成功{path}{file_name}")
+            break
         except Exception as e:
-            try:
-                # 尝试解析错误信息以更新文件
-                filePath: str = json.loads(e.__dict__.get("body"))["message"].split(
-                    " "
-                )[1]
-                for fileName in files_response:
-                    if fileName.name == filePath:
-                        await api_instance.update_file(
-                            project_id, file_id=fileName.id, file=file
-                        )
-                        print(f"文件已更新！文件路径为：{fileName.name}")
-            except (json.JSONDecodeError, KeyError, IndexError):
-                # 如果错误信息不是预期的格式，打印原始错误
-                print(f"上传文件 {file} 时发生未知错误: {e}")
+            if attempt < max_retries - 1:
+                wait_time = 2 ** attempt  # 指数退避: 1s, 2s, 4s
+                print(f"上传文件 {file} 失败: {e}。正在重试 ({attempt + 1}/{max_retries})... 等待 {wait_time} 秒")
+                await asyncio.sleep(wait_time)
+            else:
+                print(f"上传文件 {file} 时发生未知错误，已达到最大重试次数: {e}")
 
 
 def get_filelist(dir):
@@ -92,25 +100,45 @@ async def main():
         print("在 'Source' 目录中未找到任何 'en_us.json' 文件。请检查文件是否存在。")
         return
 
-    for file in files:
-        # 使用 os.path.relpath 获取相对于 'Source' 目录的正确路径
-        path = os.path.relpath(os.path.dirname(file), "./Source")
+    # 预先获取文件列表
+    project_id = int(os.environ["PROJECT_ID"])
+    
+    async with paratranz_client.ApiClient(configuration) as api_client:
+        api_instance = paratranz_client.FilesApi(api_client)
+        try:
+            existing_files_list = await api_instance.get_files(project_id)
+            # 转换为字典以进行 O(1) 查找
+            existing_files_dict = {f.name: f for f in existing_files_list}
+        except Exception as e:
+            print(f"获取文件列表失败: {e}")
+            existing_files_dict = {}
 
-        # 如果文件直接位于 Source 目录下，relpath 会返回 "."，将其转换为空路径
-        if path == ".":
-            path = ""
+        # 限制并发数为 1
+        sem = asyncio.Semaphore(1)
 
-        # 统一路径分隔符为 '/'
-        path = path.replace("\\", "/")
+        async def upload_with_limit(path, file):
+            async with sem:
+                await upload_file(api_client, project_id, path, file, existing_files_dict)
 
-        # 如果路径非空（不是根目录），确保它以 '/' 结尾
-        if path:
-            path += "/"
+        for file in files:
+            # 使用 os.path.relpath 获取相对于 'Source' 目录的正确路径
+            path = os.path.relpath(os.path.dirname(file), "./Source")
 
-        print(f"准备上传 {file} 到 Paratranz 路径: '{path}'")
-        tasks.append(upload_file(path=path, file=file))
+            # 如果文件直接位于 Source 目录下，relpath 会返回 "."，将其转换为空路径
+            if path == ".":
+                path = ""
 
-    await asyncio.gather(*tasks)
+            # 统一路径分隔符为 '/'
+            path = path.replace("\\", "/")
+
+            # 如果路径非空（不是根目录），确保它以 '/' 结尾
+            if path:
+                path += "/"
+
+            print(f"准备上传 {file} 到 Paratranz 路径: '{path}'")
+            tasks.append(upload_with_limit(path=path, file=file))
+
+        await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import sys
 import shutil
 from collections import OrderedDict
 from pathlib import Path
@@ -47,7 +48,7 @@ def translate(file_id: int) -> tuple[list[str], list[str]]:
         original = item.get("original", "")
         # 优先使用翻译内容，缺失时根据 stage 使用原文
         values.append(
-            original if item["stage"] in [0, -1, 2] or not translation else translation
+            original if item["stage"] in [0, -1] or not translation else translation
         )
 
     return keys, values
@@ -133,12 +134,50 @@ def process_translation(file_id: int, path: Path) -> dict[str, str]:
     """
     keys, values = translate(file_id)
 
-    # 手动处理文本的替换，避免反斜杠被转义
+    source_file_path = Path("Source") / path
     try:
-        with open("Source/" + str(path), "r", encoding="UTF-8") as f:
-            zh_cn_dict = json.load(f)
-    except IOError:
+        # 先读取文件内容到字符串，这样即使解析失败，我们也能访问它
+        with open(source_file_path, "r", encoding="UTF-8") as f:
+            content = f.read()
+        zh_cn_dict = json.loads(content)
+    except json.JSONDecodeError as e:
+        print("---" * 20)
+        print(">>> FATAL: JSON 解析失败！")
+        print(f">>> 文件: {source_file_path}")
+        print(f">>> 错误: {e.msg}")
+        print(f">>> 位置: 第 {e.lineno} 行, 第 {e.colno} 列")
+        print("---" * 20)
+        print("错误发生位置上下文：\n")
+
+        lines = content.splitlines()
+        # 计算要显示的行范围（错误行的前后各两行）
+        start = max(0, e.lineno - 3)
+        end = min(len(lines), e.lineno + 2)
+
+        for i in range(start, end):
+            line_num = i + 1
+            line_content = lines[i]
+            # 在错误行前面加上 '>' 标记
+            prefix = f"{line_num:4d}> " if line_num == e.lineno else f"{line_num:4d}| "
+            print(f"{prefix}{line_content}")
+
+            # 为错误行添加一个指向错误列的指针 '^'
+            if line_num == e.lineno:
+                pointer_space = ' ' * (len(prefix) + e.colno - 1)
+                print(f"{pointer_space}^")
+        
+        print("\n---" * 20)
+        if e.lineno > 1:
+            print(f"提示: 这个问题通常是由于上一行 (第 {e.lineno - 1} 行) 的末尾缺少了逗号 ',' 导致的。请仔细检查。")
+        print("脚本已终止。")
+        sys.exit(1) # 遇到解析错误，直接退出脚本
+        
+    except FileNotFoundError:
+        print(f"警告: 源文件 {source_file_path} 未找到，将创建一个空的翻译字典。")
         zh_cn_dict = {}
+    except IOError as e:
+        print(f"错误: 无法读取文件 {source_file_path}: {e}")
+        sys.exit(1)
 
     # 检查路径是否包含quests
     is_quest_file = "quests" in str(path)

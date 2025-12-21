@@ -22,7 +22,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install git+https://github.com/MuXiu1997/ParaTranz-SDK-python.git requests ftb_snbt_lib
+          pip install git+https://github.com/MuXiu1997/ParaTranz-SDK-python.git
+          pip install git+https://github.com/YuanXiaCN/ftb-snbt-lib-fork.git
+          pip install requests
 
       - name: Upload To Paratranz
         run: |
