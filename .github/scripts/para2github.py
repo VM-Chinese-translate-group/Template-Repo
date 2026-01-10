@@ -46,10 +46,12 @@ def translate(file_id: int) -> tuple[list[str], list[str]]:
         keys.append(item["key"])
         translation = item.get("translation", "")
         original = item.get("original", "")
-        # 优先使用翻译内容，缺失时根据 stage 使用原文
-        values.append(
-            original if item["stage"] in [0, -1] or not translation else translation
-        )
+        # 如果阶段是未翻译(0)、已隐藏(-1)，则使用原文
+        # 否则（如已翻译、已检查等），即使译文为空也使用译文内容，以保持空翻译
+        if item["stage"] in [0, -1]:
+            values.append(original)
+        else:
+            values.append(translation)
 
     return keys, values
 
