@@ -23,7 +23,7 @@ jobs:
       changed: ${{ steps.commit.outputs.changed }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -76,7 +76,7 @@ jobs:
 
       - name: Upload Error Report Artifact
         if: ${{ env.error_report_exists == 'true' }}
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: error-report
           path: error_report.html
@@ -92,14 +92,12 @@ jobs:
 
     steps:
       - name: Checkout code for Release
-        uses: actions/checkout@v5
-        with:
-          ref: 'main'
+        uses: actions/checkout@v6
 
       - name: Download Error Report Artifact (if exists)
         id: download_error
         continue-on-error: true
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: error-report
           path: ./

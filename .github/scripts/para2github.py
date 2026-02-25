@@ -165,15 +165,17 @@ def process_translation(file_id: int, path: Path) -> dict[str, str]:
 
             # 为错误行添加一个指向错误列的指针 '^'
             if line_num == e.lineno:
-                pointer_space = ' ' * (len(prefix) + e.colno - 1)
+                pointer_space = " " * (len(prefix) + e.colno - 1)
                 print(f"{pointer_space}^")
-        
+
         print("\n---" * 20)
         if e.lineno > 1:
-            print(f"提示: 这个问题通常是由于上一行 (第 {e.lineno - 1} 行) 的末尾缺少了逗号 ',' 导致的。请仔细检查。")
+            print(
+                f"提示: 这个问题通常是由于上一行 (第 {e.lineno - 1} 行) 的末尾缺少了逗号 ',' 导致的。请仔细检查。"
+            )
         print("脚本已终止。")
-        sys.exit(1) # 遇到解析错误，直接退出脚本
-        
+        sys.exit(1)  # 遇到解析错误，直接退出脚本
+
     except FileNotFoundError:
         print(f"警告: 源文件 {source_file_path} 未找到，将创建一个空的翻译字典。")
         zh_cn_dict = {}

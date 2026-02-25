@@ -1,5 +1,4 @@
 import asyncio
-import json
 import os
 from pprint import pprint
 
@@ -14,14 +13,14 @@ configuration.api_key["Token"] = os.environ["API_TOKEN"]
 
 async def upload_file(api_client, project_id, path, file, existing_files_dict):
     api_instance = paratranz_client.FilesApi(api_client)
-    
+
     # 构建 Paratranz 中的完整文件路径
     file_name = os.path.basename(file)
     full_path = path + file_name
-    
+
     # 检查文件是否已存在
     existing_file = existing_files_dict.get(full_path)
-    
+
     max_retries = 3
     for attempt in range(max_retries):
         try:
@@ -37,14 +36,16 @@ async def upload_file(api_client, project_id, path, file, existing_files_dict):
                     project_id, file=file, path=path
                 )
                 pprint(api_response)
-            break # 成功则退出重试循环
+            break  # 成功则退出重试循环
         except ValidationError as error:
             print(f"文件上传成功{path}{file_name}")
             break
         except Exception as e:
             if attempt < max_retries - 1:
-                wait_time = 2 ** attempt  # 指数退避: 1s, 2s, 4s
-                print(f"上传文件 {file} 失败: {e}。正在重试 ({attempt + 1}/{max_retries})... 等待 {wait_time} 秒")
+                wait_time = 2**attempt  # 指数退避: 1s, 2s, 4s
+                print(
+                    f"上传文件 {file} 失败: {e}。正在重试 ({attempt + 1}/{max_retries})... 等待 {wait_time} 秒"
+                )
                 await asyncio.sleep(wait_time)
             else:
                 print(f"上传文件 {file} 时发生未知错误，已达到最大重试次数: {e}")
@@ -102,7 +103,7 @@ async def main():
 
     # 预先获取文件列表
     project_id = int(os.environ["PROJECT_ID"])
-    
+
     async with paratranz_client.ApiClient(configuration) as api_client:
         api_instance = paratranz_client.FilesApi(api_client)
         try:
@@ -118,7 +119,9 @@ async def main():
 
         async def upload_with_limit(path, file):
             async with sem:
-                await upload_file(api_client, project_id, path, file, existing_files_dict)
+                await upload_file(
+                    api_client, project_id, path, file, existing_files_dict
+                )
 
         for file in files:
             # 使用 os.path.relpath 获取相对于 'Source' 目录的正确路径
