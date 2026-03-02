@@ -90,6 +90,12 @@
   // [必需] 整合包的名称，用于生成 PR 标题等。
   "packName": "FTB StoneBlock 4",
 
+  // [必需] 供选择合适的VMTU使用
+  "mcVersion": "1.20.1", 
+
+  // [必需] 供选择合适的VMTU使用
+  "loader": "forge",
+
   // [必需] 存储当前版本信息的文件路径。脚本会读写此文件。
   "infoFilePath": "CNPack/modpackinfo.json",
 

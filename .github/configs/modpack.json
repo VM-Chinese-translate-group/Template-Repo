@@ -3,6 +3,8 @@
   "packId": 130,
   "packName": "FTB StoneBlock 4",
   "versionPattern": "FTB StoneBlock 4 {version}",
+  "mcVersion": "1.20.1", 
+  "loader": "forge",
   "updateMethod": "cursethebeast",
   "infoFilePath": "CNPack/modpackinfo.json",
   "sourceDir": "Source",
