@@ -126,6 +126,28 @@ def save_translation(zh_cn_dict: dict[str, str], path: Path) -> None:
             )
 
 
+def is_json_or_serialized_json(value: str) -> bool:
+    """
+    检测一个字符串是否包含JSON格式的内容。
+    
+    :param value: 要检测的字符串值（已进行转义符转换）
+    :return: 如果是有效的JSON格式则返回True，否则返回False
+    """
+    value = value.strip()
+    if not value:
+        return False
+
+    if (value.startswith("{") and value.endswith("}")) or \
+       (value.startswith("[") and value.endswith("]")):
+        try:
+            json.loads(value)
+            return True
+        except (json.JSONDecodeError, ValueError):
+            pass
+    
+    return False
+
+
 def process_translation(file_id: int, path: Path) -> dict[str, str]:
     """
     处理单个文件的翻译，返回翻译字典
@@ -189,16 +211,9 @@ def process_translation(file_id: int, path: Path) -> dict[str, str]:
     for key, value in zip(keys, values):
         value = re.sub(r'\\"', '"', value)
 
-        # 增加一个判断：如果值像一个JSON对象（以{开头，以}结尾），则跳过全局替换
-        is_json_like = value.strip().startswith("{") and value.strip().endswith("}")
+        contains_json = is_json_or_serialized_json(value)
 
-        if (
-            is_quest_file
-            and not is_json_like
-            and "image" not in value
-            and not value.startswith('["')
-            and '"color": ' not in value
-        ):
+        if is_quest_file and not contains_json and "image" not in value:
             value = value.replace(" ", "\u00a0")
 
         zh_cn_dict[key] = value
