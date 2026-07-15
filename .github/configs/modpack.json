@@ -1,5 +1,5 @@
 {
-  //这是一条为避免忘记修改而写的注释，如何修改请查看Readme文件。
+  //这是一条为避免忘记修改而写的注释，如何修改请查看Readme文件。（生产环境中需要删除这条注释）
   "packId": 130,
   "packName": "FTB StoneBlock 4",
   "versionPattern": "FTB StoneBlock 4 {version}",
