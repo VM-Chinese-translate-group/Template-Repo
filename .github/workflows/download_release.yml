@@ -93,6 +93,8 @@ jobs:
     steps:
       - name: Checkout code for Release
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref_name }}
 
       - name: Download Error Report Artifact (if exists)
         id: download_error
