@@ -28,12 +28,12 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3"
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: .github/requirements-ftb.txt
 
       - name: Install dependencies
-        run: |
-          pip install requests
-          pip install git+https://github.com/YuanXiaCN/ftb-snbt-lib-fork.git
+        run: python -m pip install -r .github/requirements-ftb.txt
 
       - name: Configure Git
         run: |
@@ -59,16 +59,14 @@ jobs:
       - name: Commit and Push changes
         id: commit
         run: |
-          # 检查工作区，如果没有任何更改，则提前退出
-          if [[ -z $(git status --porcelain) ]]; then
+          # 只提交下载到 CNPack 的译文；检查报告保留为构建产物，不进入仓库。
+          git add -A -- CNPack
+          if git diff --cached --quiet; then
             echo "No changes detected from Paratranz. Nothing to commit."
             echo "changed=false" >> $GITHUB_OUTPUT
             exit 0
           fi
 
-          git rm --cached --ignore-unmatch error_report.html
-
-          git add .
           git commit -m '从Paratranz同步翻译'
           git push
 
@@ -122,14 +120,13 @@ jobs:
           # 1. 获取最新 Release 的所有附件文件名
           ASSETS=$(gh release view --repo vm-chinese-translate-group/VMTranslationUpdateMod --json assets --jq '.assets[].name')
           
-          # 2. 使用 grep 结合正则表达式进行精确过滤
-          # grep -i : 忽略 loader 名称的大小写
-          # grep -E "${{ env.mc_version }}([^0-9]|$)" : 确保版本号末尾跟的不是数字（例如连字符、点号），或者是行尾，从而排除 .10 和 .11
-          EXACT_FILE=$(echo "$ASSETS" | grep -i "${{ env.loader }}" | grep -E "${{ env.mc_version }}([^0-9]|$)" | head -n 1)
+          # 2. 转义版本号中的正则字符，再进行边界匹配
+          ESCAPED_VERSION=$(printf '%s' "$mc_version" | sed 's/[][\\.^$*+?{}|()]/\\&/g')
+          EXACT_FILE=$(printf '%s\n' "$ASSETS" | grep -Fi -- "$loader" | grep -E -- "${ESCAPED_VERSION}([^0-9]|$)" | head -n 1 || true)
           
           # 3. 根据匹配结果执行下载
           if [ -z "$EXACT_FILE" ]; then
-            echo "Warning: No matching VMTU jar found for ${{ env.mc_version }} and ${{ env.loader }}"
+            echo "Warning: No matching VMTU jar found for $mc_version and $loader"
           else
             echo "Successfully found exact match: $EXACT_FILE"
             gh release download \

@@ -29,7 +29,7 @@
 
    | 名称    | 值                                       |
    | ------- | ---------------------------------------- |
-   | API_KEY | 你的 Paratranz token，需具备上传文件权限 |
+   | API_KEY | 你的 Paratranz token，需具备上传文件权限（直接填写原始 token 即可） |
    | CF_API_KEY| 如果采用CurseForge源检查更新须填此项|
 
    🔑 Token 可在 [Paratranz 用户设置页](https://paratranz.cn/users/my) 获取。
@@ -71,6 +71,74 @@
 - **GitHub → Paratranz** 的同步任务使用频率较低，仅支持手动触发。
 - 若项目已完成，请至仓库 **Settings** 中禁用工作流运行。
 
+### 任务 JSON 仅在 Paratranz 分片
+
+对于 Minecraft 1.20 及以下常见的 JSON 任务语言文件，可以在 `.github/configs/modpack.json` 中配置虚拟分片。GitHub 的 `Source` 和 `CNPack` 仍各自只保留一个完整语言文件；上传时才按规则生成临时 JSON，下载时再按源文件的键顺序合并。
+
+该功能只处理 `jsonSplits` 中明确配置的 `.json` 文件，不会改变现有的 FTB Quests SNBT 拆分、上传、下载或合并逻辑。未配置时，Paratranz 同步行为保持不变。
+
+```jsonc
+{
+  "paratranz": {
+    "jsonSplits": [
+      {
+        // 相对于仓库 Source 目录的完整源文件路径。
+        "path": "resourcepacks/vm_translations/assets/quests/lang/en_us.json",
+
+        // 按顺序匹配；第一个捕获组将成为 Paratranz 上的文件名。
+        "groupPatterns": [
+          "^ftbquests\\.chapter\\.([^.]+)\\.",
+          "^ftbquests\\.([^.]+)\\."
+        ],
+
+        // 所有规则都未匹配时使用 general.json。
+        "fallbackGroup": "general"
+      }
+    ],
+
+    // 下载到 CNPack 时进行路径前缀重定向；未匹配的路径保持不变。
+    "pathRedirects": [
+      {
+        "from": "resourcepacks",
+        "to": "config/paxi/resourcepacks"
+      }
+    ]
+  }
+}
+```
+
+以上示例会在 Paratranz 中生成：
+
+```text
+resourcepacks/vm_translations/assets/quests/lang/en_us/
+├── applied_energistics_2.json
+├── chapter_group.json
+├── general.json
+├── main_story.json
+├── reward_table.json
+└── ...
+```
+
+规则采用 Python 正则表达式，必须至少包含一个捕获组。常用写法如下；写入 JSON 时，表中的每个反斜杠都要写成两个反斜杠，例如 `\.` 写成 `\\.`。
+
+| 语言键示例 | 正则表达式 | 生成的文件 |
+| ---------- | ---------- | ---------- |
+| `ftbquests.chapter.main_story.quest...` | `^ftbquests\.chapter\.([^.]+)\.` | `main_story.json` |
+| `ftbquests.reward_table.loot.title` | `^ftbquests\.([^.]+)\.` | `reward_table.json` |
+| `ftbquests.chapter_group.ABCD.title` | `^ftbquests\.([^.]+)\.` | `chapter_group.json` |
+| `quest.chapter_01.entry...` | `^quest\.([^.]+)\.` | `chapter_01.json` |
+| `mypack.quests.magic.entry...` | `^mypack\.quests\.([^.]+)\.` | `magic.json` |
+
+配置与同步规则：
+
+- `groupPatterns` 按配置顺序匹配，因此应把具体规则放在通用规则前面。上例先提取具体章节，再把 `reward_table`、`chapter_group` 等其他作用域分别归档。
+- 未匹配任何规则的键进入 `fallbackGroup`。例如根级键 `ftbquests.title` 会进入 `general.json`。
+- 远端目录由源文件名自动派生：`en_us.json` 对应 `en_us/`，无需再配置输出路径。
+- 该远端目录由工作流专用。所有新分片上传成功后，工作流会删除其中不再生成的旧 `.json` 分片，并删除原来的远端长文件；不会删除目录外的文件。
+- 下载时如果发现未知键、重复键或缺少源文件中的键，工作流会直接失败，不会生成残缺的 GitHub 语言文件。
+- `pathRedirects` 只匹配完整路径前缀。例如 `resourcepacks` 不会误匹配 `some_resourcepacks`。多个规则同时可用时，以配置顺序中的第一项为准。
+- 首次从远端长文件迁移到分片前，建议先运行一次 Paratranz → GitHub 并备份当前译文。键移动到新文件后，Paratranz 是否保留文件级历史或审核状态取决于平台本身。
+
 # ⚙️ 自动化整合包更新教程
 
 本教程介绍如何配置 Actions 以实现自动检测 CurseForge 上的整合包更新，并创建包含更新文件的PR。
@@ -81,9 +149,14 @@
 
 在仓库的 `.github/configs/modpack.json` 文件中进行详细配置。此文件是自动化更新脚本的核心。
 
+该文件必须是严格的 JSON，不能保留注释。完成所有配置后，务必把 `configured` 改为 `true`；保留为 `false` 时，更新检查会明确终止，避免模板默认值误更新仓库。
+
 ```jsonc
 // .github/configs/modpack.json
 {
+  // [必需] 确认已经完成配置；实际文件中不要保留本示例的注释。
+  "configured": true,
+
   // [必需] 整合包在 CurseForge 上的数字 ID。
   "packId": 130,
 
@@ -101,6 +174,12 @@
 
   // [必需] 存放整合包 `overrides` 目录内容的文件夹路径。
   "sourceDir": "Source",
+
+  // [可选] Paratranz JSON 虚拟分片与下载路径重定向；详见上文。
+  "paratranz": {
+    "jsonSplits": [],
+    "pathRedirects": []
+  },
   
   // [必需] 指定检查更新和下载文件的方法。
   // 可选值: "api" (默认) 或 "cursethebeast"。

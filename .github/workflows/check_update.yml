@@ -41,14 +41,21 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3'
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: .github/requirements.txt
 
       - name: Install Python dependencies
-        run: pip install requests
+        run: python -m pip install -r .github/requirements.txt
 
       - name: Read Config
         id: read_config
         run: |
+          CONFIGURED=$(jq -r '.configured // true' .github/configs/modpack.json)
+          if [ "$CONFIGURED" != "true" ]; then
+            echo "::error::.github/configs/modpack.json is still a template. Complete it and set configured to true."
+            exit 1
+          fi
           PACK_ID=$(jq -r '.packId' .github/configs/modpack.json)
           echo "pack_id=$PACK_ID" >> $GITHUB_OUTPUT
           UPDATE_METHOD=$(jq -r '.updateMethod // "api"' .github/configs/modpack.json)
@@ -57,7 +64,10 @@ jobs:
       - name: Download CurseTheBeast
         if: steps.read_config.outputs.update_method == 'cursethebeast'
         run: |
-          curl -L -o CurseTheBeast https://github.com/maxinglo/curse-the-beast/releases/download/v0.7.1/CurseTheBeast
+          curl --fail --show-error --location --retry 3 --retry-all-errors \
+            --output CurseTheBeast \
+            https://github.com/maxinglo/curse-the-beast/releases/download/v0.7.1/CurseTheBeast
+          echo "f10062e93dd7d119451a61d723620bfc565cf80801d21f9cfabb4f18c06e2256  CurseTheBeast" | sha256sum --check --strict
           chmod +x ./CurseTheBeast
           echo "$(pwd)" >> $GITHUB_PATH
 
@@ -77,32 +87,46 @@ jobs:
         if: steps.checker.outputs.changes_detected == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PACK_NAME: ${{ steps.checker.outputs.pack_name }}
+          NEW_VERSION: ${{ steps.checker.outputs.new_version }}
+          INFO_FILE_PATH: ${{ steps.checker.outputs.info_file_path }}
+          SOURCE_DIR: ${{ steps.checker.outputs.source_dir }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
-          # 从脚本的输出中获取变量
-          PACK_NAME=$(echo "${{ steps.checker.outputs.pack_name }}")
-          NEW_VERSION=$(echo "${{ steps.checker.outputs.new_version }}")
-          BRANCH_NAME="autoupdate/${PACK_NAME}-${NEW_VERSION}"
-          BRANCH_NAME=$(echo "$BRANCH_NAME" | tr ' ' '-' | tr '[:upper:]' '[:lower:]')
+          SAFE_VERSION=$(printf '%s' "$NEW_VERSION" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9._-]+/-/g; s/^[.-]+//; s/[.-]+$//')
+          [ -n "$SAFE_VERSION" ] || SAFE_VERSION="version"
+          BRANCH_HASH=$(printf '%s\0%s' "$PACK_NAME" "$NEW_VERSION" | sha256sum | cut -c1-12)
+          BRANCH_NAME="autoupdate/${SAFE_VERSION:0:60}-${BRANCH_HASH}"
           PR_TITLE="chore(autoupdate): Update ${PACK_NAME} to v${NEW_VERSION}"
 
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git checkout -b $BRANCH_NAME
-          git add -A ${{ steps.checker.outputs.info_file_path }}
-          git add -A ${{ steps.checker.outputs.source_dir }}
+          git checkout -b "$BRANCH_NAME"
+          git add -A -- "$INFO_FILE_PATH" "$SOURCE_DIR"
           git commit -m "$PR_TITLE"
-          git push --force -u origin $BRANCH_NAME
 
-          # Create PR and capture its number
-          PR_URL=$(gh pr create \
-            --base main \
-            --head $BRANCH_NAME \
-            --title "$PR_TITLE" \
-            --body-file "pr_body.md")
-          
-          PR_NUMBER=$(echo "$PR_URL" | awk -F'/' '{print $NF}')
+          REMOTE_SHA=$(git ls-remote --heads origin "refs/heads/$BRANCH_NAME" | awk '{print $1}')
+          if [ -n "$REMOTE_SHA" ]; then
+            git push --force-with-lease="refs/heads/$BRANCH_NAME:$REMOTE_SHA" -u origin "$BRANCH_NAME"
+          else
+            git push -u origin "$BRANCH_NAME"
+          fi
+
+          PR_NUMBER=$(gh pr list --base "$DEFAULT_BRANCH" --head "$BRANCH_NAME" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$PR_NUMBER" ]; then
+            gh pr edit "$PR_NUMBER" --title "$PR_TITLE" --body-file "pr_body.md"
+            echo "Pull Request #${PR_NUMBER} updated."
+          else
+            PR_URL=$(gh pr create \
+              --base "$DEFAULT_BRANCH" \
+              --head "$BRANCH_NAME" \
+              --title "$PR_TITLE" \
+              --body-file "pr_body.md")
+            PR_NUMBER=${PR_URL##*/}
+            echo "Pull Request #${PR_NUMBER} created."
+          fi
+
           echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
-          echo "Pull Request #${PR_NUMBER} created."
 
   # JOB 2: Generate diff report and post it as a comment
   build-report:
@@ -120,24 +144,26 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3'
+          python-version: '3.13'
       
       - name: Download CurseTheBeast
         if: needs.update-and-create-pr.outputs.update_method == 'cursethebeast'
         run: |
-          curl -L -o CurseTheBeast https://github.com/maxinglo/curse-the-beast/releases/download/v0.7.1/CurseTheBeast
+          curl --fail --show-error --location --retry 3 --retry-all-errors \
+            --output CurseTheBeast \
+            https://github.com/maxinglo/curse-the-beast/releases/download/v0.7.1/CurseTheBeast
+          echo "f10062e93dd7d119451a61d723620bfc565cf80801d21f9cfabb4f18c06e2256  CurseTheBeast" | sha256sum --check --strict
           chmod +x ./CurseTheBeast
           echo "$(pwd)" >> $GITHUB_PATH
 
       - name: Download old and new archives
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          PACK_ID: ${{ needs.update-and-create-pr.outputs.pack_id }}
+          LOCAL_ID: ${{ needs.update-and-create-pr.outputs.local_version_id }}
+          NEW_ID: ${{ needs.update-and-create-pr.outputs.new_version_id }}
+          UPDATE_METHOD: ${{ needs.update-and-create-pr.outputs.update_method }}
         run: |
-          PACK_ID="${{ needs.update-and-create-pr.outputs.pack_id }}"
-          LOCAL_ID="${{ needs.update-and-create-pr.outputs.local_version_id }}"
-          NEW_ID="${{ needs.update-and-create-pr.outputs.new_version_id }}"
-          UPDATE_METHOD="${{ needs.update-and-create-pr.outputs.update_method }}"
-          
           if [ "$UPDATE_METHOD" == "cursethebeast" ]; then
             echo "::group::Downloading archives using CurseTheBeast"
             ./CurseTheBeast download "$PACK_ID" "$LOCAL_ID" --output ./old_version.zip
@@ -146,22 +172,22 @@ jobs:
           else
             echo "::group::Downloading archives using CurseForge API"
             echo "Fetching download URL for old version (ID: $LOCAL_ID)..."
-            OLD_DL_URL=$(curl -s -H "x-api-key: $CF_API_KEY" "https://api.curseforge.com/v1/mods/$PACK_ID/files/$LOCAL_ID" | jq -r .data.downloadUrl)
+            OLD_DL_URL=$(curl --fail --show-error --silent -H "x-api-key: $CF_API_KEY" "https://api.curseforge.com/v1/mods/$PACK_ID/files/$LOCAL_ID" | jq -r .data.downloadUrl)
             if [ -z "$OLD_DL_URL" ] || [ "$OLD_DL_URL" == "null" ]; then
               echo "::error::Failed to get download URL for old version ID $LOCAL_ID"
               exit 1
             fi
             echo "Downloading old version..."
-            curl -L -o ./old_version.zip "$OLD_DL_URL"
+            curl --fail --show-error --location --retry 3 --retry-all-errors --output ./old_version.zip "$OLD_DL_URL"
             
             echo "Fetching download URL for new version (ID: $NEW_ID)..."
-            NEW_DL_URL=$(curl -s -H "x-api-key: $CF_API_KEY" "https://api.curseforge.com/v1/mods/$PACK_ID/files/$NEW_ID" | jq -r .data.downloadUrl)
+            NEW_DL_URL=$(curl --fail --show-error --silent -H "x-api-key: $CF_API_KEY" "https://api.curseforge.com/v1/mods/$PACK_ID/files/$NEW_ID" | jq -r .data.downloadUrl)
             if [ -z "$NEW_DL_URL" ] || [ "$NEW_DL_URL" == "null" ]; then
               echo "::error::Failed to get download URL for new version ID $NEW_ID"
               exit 1
             fi
             echo "Downloading new version..."
-            curl -L -o ./new_version.zip "$NEW_DL_URL"
+            curl --fail --show-error --location --retry 3 --retry-all-errors --output ./new_version.zip "$NEW_DL_URL"
             echo "::endgroup::"
           fi
 
