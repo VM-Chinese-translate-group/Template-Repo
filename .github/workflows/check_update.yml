@@ -170,9 +170,14 @@ jobs:
             ./CurseTheBeast download "$PACK_ID" "$NEW_ID" --output ./new_version.zip
             echo "::endgroup::"
           else
+            CF_API_KEY=$(printf '%s' "$CF_API_KEY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+            if [ -z "$CF_API_KEY" ]; then
+              echo "::error::CF_API_KEY is missing from the PARATRANZ_ENV environment secrets"
+              exit 1
+            fi
             echo "::group::Downloading archives using CurseForge API"
             echo "Fetching download URL for old version (ID: $LOCAL_ID)..."
-            OLD_DL_URL=$(curl --fail --show-error --silent -H "x-api-key: $CF_API_KEY" "https://api.curseforge.com/v1/mods/$PACK_ID/files/$LOCAL_ID" | jq -r .data.downloadUrl)
+            OLD_DL_URL=$(curl --fail --show-error --silent -H "Accept: application/json" -H "x-api-key: $CF_API_KEY" "https://api.curseforge.com/v1/mods/$PACK_ID/files/$LOCAL_ID" | jq -r .data.downloadUrl)
             if [ -z "$OLD_DL_URL" ] || [ "$OLD_DL_URL" == "null" ]; then
               echo "::error::Failed to get download URL for old version ID $LOCAL_ID"
               exit 1
@@ -181,7 +186,7 @@ jobs:
             curl --fail --show-error --location --retry 3 --retry-all-errors --output ./old_version.zip "$OLD_DL_URL"
             
             echo "Fetching download URL for new version (ID: $NEW_ID)..."
-            NEW_DL_URL=$(curl --fail --show-error --silent -H "x-api-key: $CF_API_KEY" "https://api.curseforge.com/v1/mods/$PACK_ID/files/$NEW_ID" | jq -r .data.downloadUrl)
+            NEW_DL_URL=$(curl --fail --show-error --silent -H "Accept: application/json" -H "x-api-key: $CF_API_KEY" "https://api.curseforge.com/v1/mods/$PACK_ID/files/$NEW_ID" | jq -r .data.downloadUrl)
             if [ -z "$NEW_DL_URL" ] || [ "$NEW_DL_URL" == "null" ]; then
               echo "::error::Failed to get download URL for new version ID $NEW_ID"
               exit 1

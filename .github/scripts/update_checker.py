@@ -104,17 +104,29 @@ def extract_clean_version(full_name, pattern):
     Extracts a clean version string from a full name using a pattern.
     Example: "Techopolis 3-7.0" with pattern "Techopolis 3-{version}" -> "7.0"
     """
-    if not pattern or "{version}" not in pattern:
+    if not pattern:
         return full_name
-    try:
-        prefix, suffix = pattern.split("{version}")
-        regex_pattern = f"^{re.escape(prefix)}(.*){re.escape(suffix)}$"
-        match = re.match(regex_pattern, full_name)
-        if match:
-            return match.group(1).strip()
-    except ValueError:
-        print(f"Warning: Invalid version pattern '{pattern}'.")
-    return full_name
+    if pattern.count("{version}") != 1:
+        raise ValueError(
+            "versionPattern must contain exactly one '{version}' placeholder."
+        )
+
+    prefix, suffix = pattern.split("{version}")
+    regex_pattern = f"{re.escape(prefix)}(.*){re.escape(suffix)}"
+    match = re.fullmatch(regex_pattern, full_name)
+    if not match:
+        raise ValueError(
+            f"CurseForge file name '{full_name}' does not match versionPattern "
+            f"'{pattern}'. Update versionPattern to match the file name exactly."
+        )
+
+    clean_version = match.group(1).strip()
+    if not clean_version:
+        raise ValueError(
+            f"CurseForge file name '{full_name}' produced an empty version using "
+            f"versionPattern '{pattern}'."
+        )
+    return clean_version
 
 
 def reconstruct_full_name(clean_version, pattern):
@@ -306,7 +318,7 @@ def collect_changes(source_dir, new_source_root, attention_list, exclusion_patte
 
 def main():
     # --- Configuration and Setup ---
-    api_key = os.getenv("CF_API_KEY")
+    api_key = (os.getenv("CF_API_KEY") or "").strip()
 
     repo_root = Path(".").resolve()
     config_path = repo_root / ".github" / "configs" / "modpack.json"
@@ -387,12 +399,29 @@ def main():
                 "Error: CurseForge API key (CF_API_KEY) not found. Required for 'api' update method."
             )
 
-        headers = {"x-api-key": api_key}
+        headers = {"Accept": "application/json", "x-api-key": api_key}
         api_url = f"https://api.curseforge.com/v1/mods/{pack_id}/files?pageSize=50"
         try:
             response = requests.get(api_url, headers=headers, timeout=REQUEST_TIMEOUT)
             response.raise_for_status()
             files_data = response.json()["data"]
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code if e.response is not None else None
+            if status_code in (401, 403):
+                sys.exit(
+                    f"Error: CurseForge API rejected CF_API_KEY (HTTP {status_code}). "
+                    "The current REST API still uses the /v1 endpoint and x-api-key "
+                    "header. Generate or verify an authorized key using the official "
+                    "instructions at https://docs.curseforge.com/rest-api/ (third-party "
+                    "services must apply for API access), then save the raw key (without "
+                    "quotes) as the CF_API_KEY secret in the PARATRANZ_ENV environment."
+                )
+            if status_code == 429:
+                sys.exit(
+                    "Error: CurseForge API rate limit exceeded (HTTP 429). "
+                    "Wait before rerunning the workflow."
+                )
+            sys.exit(f"Error fetching data from CurseForge API: {e}")
         except requests.exceptions.RequestException as e:
             sys.exit(f"Error fetching data from CurseForge API: {e}")
         except (KeyError, IndexError):
@@ -410,7 +439,14 @@ def main():
         latest_version_id = latest_file_info["id"]
         latest_download_url = latest_file_info["downloadUrl"]
 
-        if local_full_name == latest_full_name:
+        try:
+            latest_clean_version = extract_clean_version(
+                latest_full_name, version_pattern
+            )
+        except ValueError as e:
+            sys.exit(f"Error: {e}")
+
+        if local_clean_version == latest_clean_version:
             print("Already up to date. Exiting.")
             return
 
@@ -430,7 +466,6 @@ def main():
                 f"Warning: Could not find version ID for local version '{local_full_name}'. Diff report will not be generated."
             )
 
-        latest_clean_version = extract_clean_version(latest_full_name, version_pattern)
         print(
             f"New version found: {latest_clean_version} (Full name: {latest_full_name}, ID: {latest_version_id})"
         )

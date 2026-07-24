@@ -30,9 +30,10 @@
    | 名称    | 值                                       |
    | ------- | ---------------------------------------- |
    | API_KEY | 你的 Paratranz token，需具备上传文件权限（直接填写原始 token 即可） |
-   | CF_API_KEY| 如果采用CurseForge源检查更新须填此项|
+   | CF_API_KEY | 使用 CurseForge API 检查更新时必填；只填写原始 key，不要添加引号 |
 
    🔑 Token 可在 [Paratranz 用户设置页](https://paratranz.cn/users/my) 获取。
+   CurseForge API Key 请按[官方 REST API 文档](https://docs.curseforge.com/rest-api/)申请或生成；文档要求第三方模组服务先申请 API 访问权限。如果工作流返回 HTTP 401/403，说明 CurseForge 未接受该 key；请确认授权或重新生成后，覆盖 `PARATRANZ_ENV` 环境中的 `CF_API_KEY` secret。
 
 3. 在该环境中添加 **环境变量（Environment variables）**：
 
@@ -187,7 +188,9 @@ resourcepacks/vm_translations/assets/quests/lang/en_us/
   "updateMethod": "cursethebeast",
   
   // [可选, 仅用于 'api' 方法] 版本号解析模板。
-  // 用于从 CurseForge API 返回的完整文件名中提取干净的版本号。
+  // 必须与 CurseForge 返回的实际文件名完全对应，并且只包含一个 {version}。
+  // 例如文件名 Fractured-4.0.zip 应配置为 Fractured-{version}。
+  // 模板不匹配时工作流会停止，避免把完整文件名误写成版本号。
   "versionPattern": "FTB StoneBlock 4 {version}",
 
   // [可选] "关注列表"，指定脚本只检查特定文件或文件夹的变更，可提高效率。
