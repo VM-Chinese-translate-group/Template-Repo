@@ -42,19 +42,6 @@ jobs:
 
       - name: Sync translations from Paratranz
         run: python .github/scripts/para2github.py
-
-      - name: Run FTB Color Checker Script
-        run: python .github/scripts/check_ftb_colors.py ./CNPack
-        continue-on-error: true
-
-      - name: Check if error_report.html was generated
-        id: check_report
-        run: |
-          if [ -f error_report.html ]; then
-            echo "error_report_exists=true" >> $GITHUB_ENV
-          else
-            echo "error_report_exists=false" >> $GITHUB_ENV
-          fi
         
       - name: Commit and Push changes
         id: commit
@@ -72,13 +59,6 @@ jobs:
 
           echo "changed=true" >> $GITHUB_OUTPUT
 
-      - name: Upload Error Report Artifact
-        if: ${{ env.error_report_exists == 'true' }}
-        uses: actions/upload-artifact@v6
-        with:
-          name: error-report
-          path: error_report.html
-
   release:
     name: Create Release
     runs-on: ubuntu-latest
@@ -93,14 +73,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ github.ref_name }}
-
-      - name: Download Error Report Artifact (if exists)
-        id: download_error
-        continue-on-error: true
-        uses: actions/download-artifact@v7
-        with:
-          name: error-report
-          path: ./
 
       - name: Parse Target Version from modpack.json
         id: parse_version
@@ -151,10 +123,7 @@ jobs:
           name: "测试版构建 ${{ env.datetime }}"
           body: |
             自动生成的最新汉化补丁
-
-            ${{ steps.download_error.outcome == 'success' && '⚠ 注意：本次同步检测到 FTB 任务文本颜色可能存在错误，详见 release 附带的 error_report.html。' || '✔ 未发现异常颜色，FTB任务颜色字符检查通过。' }}
           artifacts: |
             VM-CNPack-${{ env.datetime }}.zip
-            error_report.html
           draft: false
           prerelease: true
