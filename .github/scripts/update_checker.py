@@ -529,6 +529,8 @@ def main():
     with open(info_file_path, "r+", encoding="utf-8") as f:
         data = json.load(f)
         data["modpack"]["version"] = latest_clean_version
+        if "translation" in data.get("modpack", {}):
+            data["modpack"]["translation"]["version"] = latest_clean_version
         f.seek(0)
         json.dump(data, f, indent=2, ensure_ascii=False)
         f.truncate()
