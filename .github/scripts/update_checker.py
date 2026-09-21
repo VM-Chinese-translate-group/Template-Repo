@@ -1,5 +1,3 @@
-# .github/scripts/update_checker.py
-
 import os
 import sys
 import json
