@@ -233,7 +233,7 @@ resourcepacks/vm_translations/assets/quests/lang/en_us/
     - 下载新旧两个版本的整合包存档。
     - 对比 `overrides` 目录中的文件差异。
     - 将文件的 **新增、修改、删除** 应用到 `sourceDir` 目录。
-    - 更新 `infoFilePath` 中指定的版本号。
+    - 更新 `infoFilePath` 中的 `modpack.version` 和 `modpack.translation.version`，两者保持一致。
     - 创建一个新的分支，并提交所有变更。
     - **自动创建一个PR**，其中包含清晰的变更摘要。
     - 生成一份详细的 HTML 差异报告，并将其链接评论到该 PR 中，供人工审查。

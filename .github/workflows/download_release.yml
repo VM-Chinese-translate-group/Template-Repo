@@ -82,32 +82,54 @@ jobs:
           echo "mc_version=$MC_VERSION" >> $GITHUB_ENV
           echo "loader=$LOADER" >> $GITHUB_ENV
 
-      - name: Download latest VMTU matching version
+      - name: Find latest VMTU matching version
+        id: vmtu
         if: ${{ env.mc_version != '' && env.loader != '' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          mkdir -p ./CNPack/mods
-          
-          # 1. 获取最新 Release 的所有附件文件名
-          ASSETS=$(gh release view --repo vm-chinese-translate-group/VMTranslationUpdateMod --json assets --jq '.assets[].name')
-          
-          # 2. 转义版本号中的正则字符，再进行边界匹配
+          RELEASE=$(gh release view --repo vm-chinese-translate-group/VMTranslationUpdateMod --json tagName,assets)
+          ASSETS=$(printf '%s' "$RELEASE" | jq -r '.assets[].name')
           ESCAPED_VERSION=$(printf '%s' "$mc_version" | sed 's/[][\\.^$*+?{}|()]/\\&/g')
           EXACT_FILE=$(printf '%s\n' "$ASSETS" | grep -Fi -- "$loader" | grep -E -- "${ESCAPED_VERSION}([^0-9]|$)" | head -n 1 || true)
-          
-          # 3. 根据匹配结果执行下载
           if [ -z "$EXACT_FILE" ]; then
             echo "Warning: No matching VMTU jar found for $mc_version and $loader"
-          else
-            echo "Successfully found exact match: $EXACT_FILE"
-            gh release download \
-              --repo vm-chinese-translate-group/VMTranslationUpdateMod \
-              --pattern "$EXACT_FILE" \
-              --dir ./CNPack/mods \
-              --clobber
+            exit 0
           fi
+          TAG=$(printf '%s' "$RELEASE" | jq -r '.tagName')
+          ASSET_HASH=$(printf '%s' "$RELEASE" | jq -c --arg name "$EXACT_FILE" '{tagName, asset: (.assets[] | select(.name == $name) | {id, name, updatedAt, size})}' | sha256sum | cut -d ' ' -f 1)
+          echo "file=$EXACT_FILE" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "cache_key=vmtu-v1-$ASSET_HASH" >> "$GITHUB_OUTPUT"
 
+      - name: Cache VMTU download
+        id: vmtu_cache
+        if: steps.vmtu.outputs.file != ''
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/vmtu-download
+          key: ${{ steps.vmtu.outputs.cache_key }}
+
+      - name: Download VMTU on cache miss
+        if: steps.vmtu.outputs.file != '' && steps.vmtu_cache.outputs.cache-hit != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VMTU_FILE: ${{ steps.vmtu.outputs.file }}
+          VMTU_TAG: ${{ steps.vmtu.outputs.tag }}
+        run: |
+          gh release download "$VMTU_TAG" \
+            --repo vm-chinese-translate-group/VMTranslationUpdateMod \
+            --pattern "$VMTU_FILE" \
+            --dir "$RUNNER_TEMP/vmtu-download" \
+            --clobber
+
+      - name: Copy VMTU into patch
+        if: steps.vmtu.outputs.file != ''
+        env:
+          VMTU_FILE: ${{ steps.vmtu.outputs.file }}
+        run: |
+          mkdir -p ./CNPack/mods
+          cp -- "$RUNNER_TEMP/vmtu-download/$VMTU_FILE" ./CNPack/mods/
 
       - name: Get current datetime for tag
         id: datetime

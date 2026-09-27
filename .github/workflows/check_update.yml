@@ -61,12 +61,21 @@ jobs:
           UPDATE_METHOD=$(jq -r '.updateMethod // "api"' .github/configs/modpack.json)
           echo "update_method=$UPDATE_METHOD" >> $GITHUB_OUTPUT
 
-      - name: Download CurseTheBeast
+      - name: Cache CurseTheBeast
+        if: steps.read_config.outputs.update_method == 'cursethebeast'
+        uses: actions/cache@v6
+        with:
+          path: CurseTheBeast
+          key: cursethebeast-${{ runner.os }}-${{ runner.arch }}-v0.7.1-f10062e93dd7d119-v1
+
+      - name: Prepare CurseTheBeast
         if: steps.read_config.outputs.update_method == 'cursethebeast'
         run: |
-          curl --fail --show-error --location --retry 3 --retry-all-errors \
-            --output CurseTheBeast \
-            https://github.com/maxinglo/curse-the-beast/releases/download/v0.7.1/CurseTheBeast
+          if ! echo "f10062e93dd7d119451a61d723620bfc565cf80801d21f9cfabb4f18c06e2256  CurseTheBeast" | sha256sum --check --status; then
+            curl --fail --show-error --location --retry 3 --retry-all-errors \
+              --output CurseTheBeast \
+              https://github.com/maxinglo/curse-the-beast/releases/download/v0.7.1/CurseTheBeast
+          fi
           echo "f10062e93dd7d119451a61d723620bfc565cf80801d21f9cfabb4f18c06e2256  CurseTheBeast" | sha256sum --check --strict
           chmod +x ./CurseTheBeast
           echo "$(pwd)" >> $GITHUB_PATH
@@ -90,6 +99,7 @@ jobs:
           PACK_NAME: ${{ steps.checker.outputs.pack_name }}
           NEW_VERSION: ${{ steps.checker.outputs.new_version }}
           INFO_FILE_PATH: ${{ steps.checker.outputs.info_file_path }}
+          PATCH_FILE_PATH: ${{ steps.checker.outputs.patch_file_path }}
           SOURCE_DIR: ${{ steps.checker.outputs.source_dir }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
@@ -102,7 +112,7 @@ jobs:
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           git checkout -b "$BRANCH_NAME"
-          git add -A -- "$INFO_FILE_PATH" "$SOURCE_DIR"
+          git add -A -- "$INFO_FILE_PATH" "$PATCH_FILE_PATH" "$SOURCE_DIR"
           git commit -m "$PR_TITLE"
 
           REMOTE_SHA=$(git ls-remote --heads origin "refs/heads/$BRANCH_NAME" | awk '{print $1}')
@@ -134,6 +144,7 @@ jobs:
     environment: PARATRANZ_ENV
     needs: update-and-create-pr
     permissions:
+      actions: write # Remove superseded report archive caches
       pull-requests: write # Needed for posting the comment
     if: needs.update-and-create-pr.outputs.pr_number && needs.update-and-create-pr.outputs.local_version_id && needs.update-and-create-pr.outputs.new_version_id
 
@@ -146,17 +157,35 @@ jobs:
         with:
           python-version: '3'
       
-      - name: Download CurseTheBeast
+      - name: Cache CurseTheBeast
+        if: needs.update-and-create-pr.outputs.update_method == 'cursethebeast'
+        uses: actions/cache@v5
+        with:
+          path: CurseTheBeast
+          key: cursethebeast-${{ runner.os }}-${{ runner.arch }}-v0.7.1-f10062e93dd7d119-v1
+
+      - name: Prepare CurseTheBeast
         if: needs.update-and-create-pr.outputs.update_method == 'cursethebeast'
         run: |
-          curl --fail --show-error --location --retry 3 --retry-all-errors \
-            --output CurseTheBeast \
-            https://github.com/maxinglo/curse-the-beast/releases/download/v0.7.1/CurseTheBeast
+          if ! echo "f10062e93dd7d119451a61d723620bfc565cf80801d21f9cfabb4f18c06e2256  CurseTheBeast" | sha256sum --check --status; then
+            curl --fail --show-error --location --retry 3 --retry-all-errors \
+              --output CurseTheBeast \
+              https://github.com/maxinglo/curse-the-beast/releases/download/v0.7.1/CurseTheBeast
+          fi
           echo "f10062e93dd7d119451a61d723620bfc565cf80801d21f9cfabb4f18c06e2256  CurseTheBeast" | sha256sum --check --strict
           chmod +x ./CurseTheBeast
           echo "$(pwd)" >> $GITHUB_PATH
 
-      - name: Download old and new archives
+      - name: Restore latest report archive
+        id: archive_cache
+        uses: actions/cache/restore@v5
+        with:
+          path: .report-archive-cache
+          key: report-archive-v2-${{ needs.update-and-create-pr.outputs.pack_id }}-${{ needs.update-and-create-pr.outputs.new_version_id }}-zip
+          restore-keys: |
+            report-archive-v2-${{ needs.update-and-create-pr.outputs.pack_id }}-${{ needs.update-and-create-pr.outputs.local_version_id }}-zip
+
+      - name: Download missing report archives
         env:
           CF_API_KEY: ${{ secrets.CF_API_KEY }}
           PACK_ID: ${{ needs.update-and-create-pr.outputs.pack_id }}
@@ -164,37 +193,34 @@ jobs:
           NEW_ID: ${{ needs.update-and-create-pr.outputs.new_version_id }}
           UPDATE_METHOD: ${{ needs.update-and-create-pr.outputs.update_method }}
         run: |
-          if [ "$UPDATE_METHOD" == "cursethebeast" ]; then
-            echo "::group::Downloading archives using CurseTheBeast"
-            ./CurseTheBeast download "$PACK_ID" "$LOCAL_ID" --output ./old_version.zip
-            ./CurseTheBeast download "$PACK_ID" "$NEW_ID" --output ./new_version.zip
-            echo "::endgroup::"
-          else
-            CF_API_KEY=$(printf '%s' "$CF_API_KEY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-            if [ -z "$CF_API_KEY" ]; then
-              echo "::error::CF_API_KEY is missing from the PARATRANZ_ENV environment secrets"
-              exit 1
+          CACHED_ID=$(cat .report-archive-cache/version.txt 2>/dev/null || true)
+          if [ -f .report-archive-cache/archive.zip ]; then
+            if [ "$CACHED_ID" = "$LOCAL_ID" ]; then
+              cp .report-archive-cache/archive.zip old_version.zip
+            elif [ "$CACHED_ID" = "$NEW_ID" ]; then
+              cp .report-archive-cache/archive.zip new_version.zip
             fi
-            echo "::group::Downloading archives using CurseForge API"
-            echo "Fetching download URL for old version (ID: $LOCAL_ID)..."
-            OLD_DL_URL=$(curl --fail --show-error --silent -H "Accept: application/json" -H "x-api-key: $CF_API_KEY" "https://api.curseforge.com/v1/mods/$PACK_ID/files/$LOCAL_ID" | jq -r .data.downloadUrl)
-            if [ -z "$OLD_DL_URL" ] || [ "$OLD_DL_URL" == "null" ]; then
-              echo "::error::Failed to get download URL for old version ID $LOCAL_ID"
-              exit 1
-            fi
-            echo "Downloading old version..."
-            curl --fail --show-error --location --retry 3 --retry-all-errors --output ./old_version.zip "$OLD_DL_URL"
-            
-            echo "Fetching download URL for new version (ID: $NEW_ID)..."
-            NEW_DL_URL=$(curl --fail --show-error --silent -H "Accept: application/json" -H "x-api-key: $CF_API_KEY" "https://api.curseforge.com/v1/mods/$PACK_ID/files/$NEW_ID" | jq -r .data.downloadUrl)
-            if [ -z "$NEW_DL_URL" ] || [ "$NEW_DL_URL" == "null" ]; then
-              echo "::error::Failed to get download URL for new version ID $NEW_ID"
-              exit 1
-            fi
-            echo "Downloading new version..."
-            curl --fail --show-error --location --retry 3 --retry-all-errors --output ./new_version.zip "$NEW_DL_URL"
-            echo "::endgroup::"
           fi
+          for VERSION in old new; do
+            DEST="${VERSION}_version.zip"
+            [ ! -f "$DEST" ] || continue
+            if [ "$VERSION" = old ]; then FILE_ID="$LOCAL_ID"; else FILE_ID="$NEW_ID"; fi
+            if [ "$UPDATE_METHOD" = cursethebeast ]; then
+              ./CurseTheBeast download "$PACK_ID" "$FILE_ID" --output "$DEST"
+            else
+              CF_API_KEY=$(printf '%s' "$CF_API_KEY" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+              if [ -z "$CF_API_KEY" ]; then
+                echo "::error::CF_API_KEY is missing from the PARATRANZ_ENV environment secrets"
+                exit 1
+              fi
+              DL_URL=$(curl --fail --show-error --silent -H "Accept: application/json" -H "x-api-key: $CF_API_KEY" "https://api.curseforge.com/v1/mods/$PACK_ID/files/$FILE_ID" | jq -r .data.downloadUrl)
+              if [ -z "$DL_URL" ] || [ "$DL_URL" = null ]; then
+                echo "::error::Failed to get download URL for file ID $FILE_ID"
+                exit 1
+              fi
+              curl --fail --show-error --location --retry 3 --retry-all-errors --output "$DEST" "$DL_URL"
+            fi
+          done
 
       - name: Generate Diff Report
         env:
@@ -208,6 +234,57 @@ jobs:
             --old-label "$OLD_LABEL" \
             --new-label "$NEW_LABEL"
       
+      - name: Keep only the new archive for caching
+        env:
+          NEW_ID: ${{ needs.update-and-create-pr.outputs.new_version_id }}
+        run: |
+          mkdir -p .report-archive-cache
+          cp new_version.zip .report-archive-cache/archive.zip
+          printf '%s\n' "$NEW_ID" > .report-archive-cache/version.txt
+          rm -f old_version.zip
+
+      - name: Save new report archive
+        uses: actions/cache/save@v5
+        with:
+          path: .report-archive-cache
+          key: ${{ steps.archive_cache.outputs.cache-primary-key }}
+
+      - name: Delete previous report archive caches
+        uses: actions/github-script@v8
+        env:
+          PACK_ID: ${{ needs.update-and-create-pr.outputs.pack_id }}
+          CURRENT_KEY: ${{ steps.archive_cache.outputs.cache-primary-key }}
+        with:
+          script: |
+            const repo = { owner: context.repo.owner, repo: context.repo.repo };
+            const currentKey = process.env.CURRENT_KEY;
+            const prefixes = [
+              `report-archive-v2-${process.env.PACK_ID}-`,
+              `report-archives-v1-${process.env.PACK_ID}-`
+            ];
+            const caches = [];
+            for (const key of prefixes) {
+              caches.push(...await github.paginate(github.rest.actions.getActionsCacheList, {
+                ...repo, ref: context.ref, key, per_page: 100
+              }));
+            }
+            // A failed cache upload must not discard the last usable archive.
+            if (!caches.some(cache => cache.key === currentKey && cache.ref === context.ref)) {
+              core.warning('New archive cache is unavailable; keeping previous caches.');
+              return;
+            }
+            for (const cache of caches) {
+              if (cache.ref === context.ref && cache.key !== currentKey &&
+                  prefixes.some(prefix => cache.key.startsWith(prefix))) {
+                try {
+                  await github.rest.actions.deleteActionsCacheById({ ...repo, cache_id: cache.id });
+                  core.info(`Deleted previous report cache: ${cache.key}`);
+                } catch (error) {
+                  if (error.status !== 404) throw error;
+                }
+              }
+            }
+
       - name: Prepare Artifacts
         run: |
           # 1. 为 GitHub Pages 创建部署目录
