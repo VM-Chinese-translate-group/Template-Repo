@@ -2,7 +2,10 @@
   "formatVersion": 1,
   "name": "整合包名字简中汉化",
   "description": "xxx整合包简体中文汉化，记得额外下载i18n模组",
-  "modpackVersionRange": "[汉化适配的整合包版本,)",
+  "modpack": {
+    "name": "英文的整合包名字",
+    "versionRange": "[汉化适配的整合包版本,)"
+  },
   "authors": [
     "VM汉化组"
   ],
